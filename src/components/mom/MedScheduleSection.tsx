@@ -73,19 +73,19 @@ export const MedScheduleSection: React.FC = () => {
           <div className="grid grid-cols-4 gap-2 text-center text-xs">
             <div className="p-2 rounded-xl bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-900/60 text-blue-900 dark:text-blue-200">
               <span className="font-extrabold text-sm block">12:00</span>
-              <span className="text-[10px] font-medium opacity-80">Acetaminophen</span>
+              <span className="text-[10px] font-bold opacity-90">APAP</span>
             </div>
             <div className="p-2 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900/60 text-amber-900 dark:text-amber-200">
               <span className="font-extrabold text-sm block">3:00</span>
-              <span className="text-[10px] font-medium opacity-80">Ibuprofen</span>
+              <span className="text-[10px] font-bold opacity-90">Ibuprofen</span>
             </div>
             <div className="p-2 rounded-xl bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-900/60 text-blue-900 dark:text-blue-200">
               <span className="font-extrabold text-sm block">6:00</span>
-              <span className="text-[10px] font-medium opacity-80">Acetaminophen</span>
+              <span className="text-[10px] font-bold opacity-90">APAP</span>
             </div>
             <div className="p-2 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900/60 text-amber-900 dark:text-amber-200">
               <span className="font-extrabold text-sm block">9:00</span>
-              <span className="text-[10px] font-medium opacity-80">Ibuprofen</span>
+              <span className="text-[10px] font-bold opacity-90">Ibuprofen</span>
             </div>
           </div>
         </div>
