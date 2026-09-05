@@ -109,3 +109,71 @@ export const sendSystemNotification = (title: string, body: string) => {
     }
   }
 };
+
+export interface NtfyAlertOptions {
+  topic: string;
+  title: string;
+  message: string;
+  priority?: 'min' | 'low' | 'default' | 'high' | 'urgent';
+  tags?: string[];
+}
+
+// Send instant push notification to Android phones via ntfy.sh
+export const sendNtfyNotification = async (options: NtfyAlertOptions): Promise<boolean> => {
+  if (!options.topic) return false;
+
+  try {
+    const cleanTopic = options.topic.trim().replace(/^https?:\/\/ntfy\.sh\//, '');
+    const headers: Record<string, string> = {
+      'Title': options.title,
+      'Priority': options.priority || 'high',
+    };
+    if (options.tags && options.tags.length > 0) {
+      headers['Tags'] = options.tags.join(',');
+    }
+
+    const response = await fetch(`https://ntfy.sh/${cleanTopic}`, {
+      method: 'POST',
+      body: options.message,
+      headers,
+    });
+
+    return response.ok;
+  } catch (err) {
+    console.error('Failed to send ntfy notification:', err);
+    return false;
+  }
+};
+
+// Unified care alert dispatcher
+export const dispatchCareAlert = (params: {
+  title: string;
+  message: string;
+  priority?: 'min' | 'low' | 'default' | 'high' | 'urgent';
+  tags?: string[];
+  soundEnabled?: boolean;
+  notificationsEnabled?: boolean;
+  ntfyEnabled?: boolean;
+  ntfyTopic?: string;
+}) => {
+  // 1. Play sound
+  if (params.soundEnabled !== false) {
+    playAlertChime();
+  }
+
+  // 2. In-browser push notification
+  if (params.notificationsEnabled !== false) {
+    sendSystemNotification(params.title, params.message);
+  }
+
+  // 3. Android phone push via ntfy.sh
+  if (params.ntfyEnabled !== false && params.ntfyTopic) {
+    sendNtfyNotification({
+      topic: params.ntfyTopic,
+      title: params.title,
+      message: params.message,
+      priority: params.priority || 'high',
+      tags: params.tags,
+    });
+  }
+};

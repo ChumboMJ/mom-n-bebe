@@ -1,23 +1,14 @@
 import React from 'react';
 import { useApp } from '../../context/AppContext';
-import { Moon, Sun, Bell, BellOff, Download, Baby, Heart } from 'lucide-react';
-import { requestNotificationPermission } from '../../utils/notifications';
+import { Moon, Sun, Bell, Download, Baby, Heart } from 'lucide-react';
 
 interface HeaderProps {
   onOpenBackupModal: () => void;
+  onOpenNotificationModal: () => void;
 }
 
-export const Header: React.FC<HeaderProps> = ({ onOpenBackupModal }) => {
-  const { unit, toggleUnit, nightMode, toggleNightMode, data, updateReminderSettings } = useApp();
-
-  const handleNotificationToggle = async () => {
-    if (!data.settings.reminders.notificationsEnabled) {
-      const granted = await requestNotificationPermission();
-      updateReminderSettings({ notificationsEnabled: granted });
-    } else {
-      updateReminderSettings({ notificationsEnabled: false });
-    }
-  };
+export const Header: React.FC<HeaderProps> = ({ onOpenBackupModal, onOpenNotificationModal }) => {
+  const { unit, toggleUnit, nightMode, toggleNightMode } = useApp();
 
   return (
     <header className="sticky top-0 z-40 backdrop-blur-md bg-white/90 dark:bg-[#07080b]/90 border-b border-stone-200 dark:border-stone-800 px-4 py-3 transition-colors">
@@ -56,21 +47,13 @@ export const Header: React.FC<HeaderProps> = ({ onOpenBackupModal }) => {
             </span>
           </button>
 
-          {/* Notifications Toggle */}
+          {/* Notifications Center Toggle */}
           <button
-            onClick={handleNotificationToggle}
-            title={data.settings.reminders.notificationsEnabled ? 'Notifications active' : 'Enable notifications'}
-            className={`p-2 rounded-xl border transition ${
-              data.settings.reminders.notificationsEnabled
-                ? 'bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 border-amber-200 dark:border-amber-800'
-                : 'bg-stone-100 dark:bg-stone-800 text-stone-500 border-stone-200 dark:border-stone-700'
-            }`}
+            onClick={onOpenNotificationModal}
+            title="Configure notifications for Android phones"
+            className="p-2 rounded-xl bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 border border-amber-200 dark:border-amber-800/60 hover:bg-amber-100 transition flex items-center space-x-1"
           >
-            {data.settings.reminders.notificationsEnabled ? (
-              <Bell className="w-4 h-4" />
-            ) : (
-              <BellOff className="w-4 h-4" />
-            )}
+            <Bell className="w-4 h-4" />
           </button>
 
           {/* Night Nursery Mode Toggle */}

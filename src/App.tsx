@@ -8,10 +8,12 @@ import { ActivityTimeline } from './components/history/ActivityTimeline';
 import { DoctorSummary } from './components/history/DoctorSummary';
 import { FeedBabyModal } from './components/baby/FeedBabyModal';
 import { DataBackupModal } from './components/settings/DataBackupModal';
+import { NotificationConfigModal } from './components/settings/NotificationConfigModal';
 
 const MainApp: React.FC = () => {
   const [isFeedModalOpen, setIsFeedModalOpen] = useState(false);
   const [isBackupModalOpen, setIsBackupModalOpen] = useState(false);
+  const [isNotificationModalOpen, setIsNotificationModalOpen] = useState(false);
 
   const scrollToMeds = () => {
     const el = document.getElementById('meds-section');
@@ -23,7 +25,10 @@ const MainApp: React.FC = () => {
   return (
     <div className="min-h-screen flex flex-col bg-stone-50 dark:bg-[#07080b] text-stone-900 dark:text-stone-100 transition-colors">
       {/* Sticky Header */}
-      <Header onOpenBackupModal={() => setIsBackupModalOpen(true)} />
+      <Header
+        onOpenBackupModal={() => setIsBackupModalOpen(true)}
+        onOpenNotificationModal={() => setIsNotificationModalOpen(true)}
+      />
 
       {/* Main Content Area */}
       <main className="flex-1 max-w-3xl w-full mx-auto px-4 py-5 space-y-6 pb-20">
@@ -58,6 +63,11 @@ const MainApp: React.FC = () => {
       <DataBackupModal
         isOpen={isBackupModalOpen}
         onClose={() => setIsBackupModalOpen(false)}
+      />
+
+      <NotificationConfigModal
+        isOpen={isNotificationModalOpen}
+        onClose={() => setIsNotificationModalOpen(false)}
       />
     </div>
   );

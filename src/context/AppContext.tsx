@@ -11,8 +11,8 @@ import {
   ConflictCheckResult,
 } from '../types';
 import { loadAppData, saveAppData, downloadBackupJSON, importAppDataFromJSON } from '../db/storage';
-import { checkMedicationConflict } from '../utils/medicationSafety';
-import { playGentleChime, playAlertChime, sendSystemNotification } from '../utils/notifications';
+import { checkMedicationConflict, calculateNextDoseInfo } from '../utils/medicationSafety';
+import { playGentleChime, dispatchCareAlert } from '../utils/notifications';
 
 interface AppContextType {
   // Data state
@@ -60,6 +60,7 @@ interface AppContextType {
   // Backup & Restore
   exportBackup: () => void;
   importBackup: (json: string) => boolean;
+  sendTestAlert: () => Promise<boolean>;
 
   // Computed Helpers
   latestFeed: BottleFeed | null;
@@ -166,24 +167,133 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
   }, [latestFeed, now, data.settings.reminders.feedIntervalHours]);
 
-  // Automated 3-hour timer reminder trigger
-  useEffect(() => {
-    if (!latestFeed) return;
-    const feedId = latestFeed.id;
+  const alertedMedKeysRef = useRef<{ [key: string]: boolean }>({});
 
-    if (feedWindowStatus.isOverdue && !hasAlertedRef.current[feedId]) {
-      hasAlertedRef.current[feedId] = true;
-      if (data.settings.reminders.soundEnabled) {
-        playAlertChime();
-      }
-      if (data.settings.reminders.notificationsEnabled) {
-        sendSystemNotification(
-          '🍼 Baby Feeding Reminder',
-          `The ${data.settings.reminders.feedIntervalHours}h feeding window is up! Time for baby's next bottle.`
-        );
+  // Automated Care Notifications Scheduler (Baby Feeds + Mom Medications)
+  useEffect(() => {
+    const { reminders } = data.settings;
+
+    // 1. Baby Feed 3-Hour Alert
+    if (latestFeed && reminders.notifyBabyFeed3h !== false) {
+      const feedId = latestFeed.id;
+      if (feedWindowStatus.isOverdue && !hasAlertedRef.current[feedId]) {
+        hasAlertedRef.current[feedId] = true;
+        dispatchCareAlert({
+          title: '🍼 Baby Feeding Reminder',
+          message: `The ${reminders.feedIntervalHours}h feeding window is up! Time for baby's next bottle.`,
+          priority: 'urgent',
+          tags: ['baby', 'bottle', 'alarm_clock'],
+          soundEnabled: reminders.soundEnabled,
+          notificationsEnabled: reminders.notificationsEnabled,
+          ntfyEnabled: reminders.ntfyEnabled,
+          ntfyTopic: reminders.ntfyTopic,
+        });
       }
     }
-  }, [feedWindowStatus.isOverdue, latestFeed, data.settings.reminders]);
+
+    // 2. Scheduled Pain Medications: APAP (12:00 & 6:00)
+    if (reminders.notifyApap !== false) {
+      const apapMed = data.medications.find((m) => m.id === 'acetaminophen');
+      if (apapMed) {
+        const info = calculateNextDoseInfo(apapMed, data.medLogs, now);
+        const hour = now.getHours();
+        const dateStr = now.toDateString();
+        // Target slots: 0, 6, 12, 18
+        if ([0, 6, 12, 18].includes(hour) && info.isReady) {
+          const key = `apap_${dateStr}_slot_${hour}`;
+          if (!alertedMedKeysRef.current[key]) {
+            alertedMedKeysRef.current[key] = true;
+            dispatchCareAlert({
+              title: '💊 Mom: APAP (Tylenol) Due',
+              message: `Scheduled dose is due now (${hour === 0 ? '12 AM' : hour === 12 ? '12 PM' : `${hour % 12} ${hour < 12 ? 'AM' : 'PM'}`}). Dose: ${apapMed.dosage}.`,
+              priority: 'high',
+              tags: ['pill', 'health', 'mom'],
+              soundEnabled: reminders.soundEnabled,
+              notificationsEnabled: reminders.notificationsEnabled,
+              ntfyEnabled: reminders.ntfyEnabled,
+              ntfyTopic: reminders.ntfyTopic,
+            });
+          }
+        }
+      }
+    }
+
+    // 3. Scheduled Pain Medications: Ibuprofen (3:00 & 9:00)
+    if (reminders.notifyIbuprofen !== false) {
+      const ibuMed = data.medications.find((m) => m.id === 'ibuprofen');
+      if (ibuMed) {
+        const info = calculateNextDoseInfo(ibuMed, data.medLogs, now);
+        const hour = now.getHours();
+        const dateStr = now.toDateString();
+        // Target slots: 3, 9, 15, 21
+        if ([3, 9, 15, 21].includes(hour) && info.isReady) {
+          const key = `ibu_${dateStr}_slot_${hour}`;
+          if (!alertedMedKeysRef.current[key]) {
+            alertedMedKeysRef.current[key] = true;
+            dispatchCareAlert({
+              title: '💊 Mom: Ibuprofen Due',
+              message: `Staggered pain dose is due now (${hour === 15 ? '3 PM' : hour === 21 ? '9 PM' : `${hour} AM`}). Dose: ${ibuMed.dosage}.`,
+              priority: 'high',
+              tags: ['pill', 'health', 'mom'],
+              soundEnabled: reminders.soundEnabled,
+              notificationsEnabled: reminders.notificationsEnabled,
+              ntfyEnabled: reminders.ntfyEnabled,
+              ntfyTopic: reminders.ntfyTopic,
+            });
+          }
+        }
+      }
+    }
+
+    // 4. Daily Maintenance: Escitalopram @ 9:00 PM (21:00)
+    if (reminders.notifyEscitalopram !== false) {
+      const escitMed = data.medications.find((m) => m.id === 'escitalopram');
+      if (escitMed) {
+        const info = calculateNextDoseInfo(escitMed, data.medLogs, now);
+        const dateStr = now.toDateString();
+        const key = `escitalopram_${dateStr}`;
+        if (now.getHours() >= 21 && !info.statusLabel.includes('Taken for today') && !alertedMedKeysRef.current[key]) {
+          alertedMedKeysRef.current[key] = true;
+          dispatchCareAlert({
+            title: '💊 Mom: Escitalopram (9:00 PM)',
+            message: "Daily 9:00 PM maintenance medication reminder for Mom.",
+            priority: 'default',
+            tags: ['pill', 'star'],
+            soundEnabled: reminders.soundEnabled,
+            notificationsEnabled: reminders.notificationsEnabled,
+            ntfyEnabled: reminders.ntfyEnabled,
+            ntfyTopic: reminders.ntfyTopic,
+          });
+        }
+      }
+    }
+
+    // 5. Postpartum Recovery: Colace Stool Softener (Morning & Evening)
+    if (reminders.notifyColace !== false) {
+      const colaceMed = data.medications.find((m) => m.id === 'colace');
+      if (colaceMed) {
+        const info = calculateNextDoseInfo(colaceMed, data.medLogs, now);
+        const hour = now.getHours();
+        const dateStr = now.toDateString();
+        if ((hour === 9 || hour === 21) && info.isReady) {
+          const key = `colace_${dateStr}_${hour}`;
+          if (!alertedMedKeysRef.current[key]) {
+            alertedMedKeysRef.current[key] = true;
+            dispatchCareAlert({
+              title: '💊 Mom: Colace / Stool Softener',
+              message: "Postpartum recovery reminder: Take with a full glass of water.",
+              priority: 'low',
+              tags: ['pill', 'glass_of_water'],
+              soundEnabled: reminders.soundEnabled,
+              notificationsEnabled: reminders.notificationsEnabled,
+              ntfyEnabled: reminders.ntfyEnabled,
+              ntfyTopic: reminders.ntfyTopic,
+            });
+          }
+        }
+      }
+    }
+  }, [feedWindowStatus.isOverdue, latestFeed, data.settings.reminders, data.medications, data.medLogs, now]);
 
   // Compute active conflict banner (if either Flexeril or Oxycodone is currently active)
   const activeConflict = useMemo(() => {
@@ -380,6 +490,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
+  const sendTestAlert = async (): Promise<boolean> => {
+    dispatchCareAlert({
+      title: '🍼 Mom & Bébé Alert Test',
+      message: 'Testing phone notifications! If your Android phone rang or vibrated, your alerts are configured.',
+      priority: 'high',
+      tags: ['baby', 'bell', 'tada'],
+      soundEnabled: data.settings.reminders.soundEnabled,
+      notificationsEnabled: data.settings.reminders.notificationsEnabled,
+      ntfyEnabled: data.settings.reminders.ntfyEnabled,
+      ntfyTopic: data.settings.reminders.ntfyTopic,
+    });
+    return true;
+  };
+
   return (
     <AppContext.Provider
       value={{
@@ -399,6 +523,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         updateReminderSettings,
         exportBackup,
         importBackup,
+        sendTestAlert,
         latestFeed,
         latestDiaper,
         feedWindowStatus,

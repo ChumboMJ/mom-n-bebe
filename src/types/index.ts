@@ -59,6 +59,14 @@ export interface ReminderSettings {
   feedIntervalHours: number; // default 3.0
   soundEnabled: boolean;
   notificationsEnabled: boolean;
+  ntfyTopic: string; // e.g. "mom-bebe-alerts"
+  ntfyEnabled: boolean;
+  // Specific alert triggers
+  notifyBabyFeed3h: boolean;
+  notifyApap: boolean; // 12:00 & 6:00
+  notifyIbuprofen: boolean; // 3:00 & 9:00
+  notifyEscitalopram: boolean; // 9:00 PM
+  notifyColace: boolean; // Stool softener
 }
 
 export interface AppSettings {
