@@ -84,7 +84,7 @@ export const getDefaultAppData = (): AppData => ({
       feedIntervalHours: 3.0,
       soundEnabled: true,
       notificationsEnabled: true,
-      ntfyTopic: `mom-bebe-${Math.random().toString(36).substring(2, 8)}`,
+      ntfyTopic: 'mom-bebe-h7j14g',
       ntfyEnabled: true,
       notifyBabyFeed3h: true,
       notifyApap: true,
@@ -130,12 +130,12 @@ export const loadAppData = (): AppData => {
     if (!parsed.settings.unit) {
       parsed.settings.unit = 'ml';
     }
-    // Ensure all reminder fields exist
+    // Ensure all reminder fields exist and default to mom-bebe-h7j14g
     parsed.settings.reminders = {
       feedIntervalHours: Number(parsed.settings?.reminders?.feedIntervalHours) || 3.0,
       soundEnabled: parsed.settings?.reminders?.soundEnabled !== false,
       notificationsEnabled: parsed.settings?.reminders?.notificationsEnabled !== false,
-      ntfyTopic: parsed.settings?.reminders?.ntfyTopic || `mom-bebe-${Math.random().toString(36).substring(2, 8)}`,
+      ntfyTopic: parsed.settings?.reminders?.ntfyTopic || 'mom-bebe-h7j14g',
       ntfyEnabled: parsed.settings?.reminders?.ntfyEnabled !== false,
       notifyBabyFeed3h: parsed.settings?.reminders?.notifyBabyFeed3h !== false,
       notifyApap: parsed.settings?.reminders?.notifyApap !== false,

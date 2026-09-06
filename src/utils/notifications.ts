@@ -116,27 +116,47 @@ export interface NtfyAlertOptions {
   message: string;
   priority?: 'min' | 'low' | 'default' | 'high' | 'urgent';
   tags?: string[];
+  delay?: string; // e.g. "10s", "3h"
+  at?: number; // Unix timestamp in seconds
+  clickUrl?: string;
 }
 
-// Send instant push notification to Android phones via ntfy.sh
+// Send or schedule push notification to Android phones via ntfy.sh
 export const sendNtfyNotification = async (options: NtfyAlertOptions): Promise<boolean> => {
   if (!options.topic) return false;
 
   try {
     const cleanTopic = options.topic.trim().replace(/^https?:\/\/ntfy\.sh\//, '');
+    const priority = options.priority === 'urgent' ? '5' : options.priority === 'high' ? '4' : '5'; // Default to 5 (urgent) for medical & feed alerts
+
     const headers: Record<string, string> = {
       'Title': options.title,
-      'Priority': options.priority || 'high',
+      'Priority': priority,
     };
+
     if (options.tags && options.tags.length > 0) {
       headers['Tags'] = options.tags.join(',');
     }
+
+    if (options.delay) {
+      headers['X-Delay'] = options.delay;
+    } else if (options.at) {
+      headers['X-At'] = options.at.toString();
+    }
+
+    // Tapping the notification opens the app
+    const click = options.clickUrl || (typeof window !== 'undefined' ? window.location.origin : 'https://mom-n-bebe-967983391227.us-central1.run.app');
+    headers['Click'] = click;
 
     const response = await fetch(`https://ntfy.sh/${cleanTopic}`, {
       method: 'POST',
       body: options.message,
       headers,
     });
+
+    if (!response.ok) {
+      console.warn('ntfy response not ok:', response.status, await response.text());
+    }
 
     return response.ok;
   } catch (err) {
@@ -145,7 +165,31 @@ export const sendNtfyNotification = async (options: NtfyAlertOptions): Promise<b
   }
 };
 
-// Unified care alert dispatcher
+// Schedule a future care alert directly with ntfy.sh servers
+export const scheduleServerCareAlert = async (params: {
+  topic: string;
+  targetTime: Date;
+  title: string;
+  message: string;
+  tags?: string[];
+}): Promise<boolean> => {
+  const targetEpoch = Math.floor(params.targetTime.getTime() / 1000);
+  const nowEpoch = Math.floor(Date.now() / 1000);
+
+  // If already in the past, don't schedule
+  if (targetEpoch <= nowEpoch) return false;
+
+  return sendNtfyNotification({
+    topic: params.topic,
+    title: params.title,
+    message: params.message,
+    priority: 'urgent',
+    tags: params.tags,
+    at: targetEpoch,
+  });
+};
+
+// Unified care alert dispatcher for immediate alerts
 export const dispatchCareAlert = (params: {
   title: string;
   message: string;
@@ -155,25 +199,29 @@ export const dispatchCareAlert = (params: {
   notificationsEnabled?: boolean;
   ntfyEnabled?: boolean;
   ntfyTopic?: string;
+  delay?: string;
+  at?: number;
 }) => {
-  // 1. Play sound
-  if (params.soundEnabled !== false) {
+  // 1. Play sound (if immediate)
+  if (!params.delay && !params.at && params.soundEnabled !== false) {
     playAlertChime();
   }
 
-  // 2. In-browser push notification
-  if (params.notificationsEnabled !== false) {
+  // 2. In-browser push notification (if immediate)
+  if (!params.delay && !params.at && params.notificationsEnabled !== false) {
     sendSystemNotification(params.title, params.message);
   }
 
-  // 3. Android phone push via ntfy.sh
+  // 3. Android phone push via ntfy.sh (works immediate OR scheduled)
   if (params.ntfyEnabled !== false && params.ntfyTopic) {
     sendNtfyNotification({
       topic: params.ntfyTopic,
       title: params.title,
       message: params.message,
-      priority: params.priority || 'high',
+      priority: params.priority || 'urgent',
       tags: params.tags,
+      delay: params.delay,
+      at: params.at,
     });
   }
 };

@@ -31,10 +31,26 @@ export const NotificationConfigModal: React.FC<NotificationConfigModalProps> = (
     setTimeout(() => setCopied(false), 2000);
   };
 
+  const [countdown, setCountdown] = useState<number | null>(null);
+
   const handleSendTest = async () => {
     setTestSent(true);
     await sendTestAlert();
     setTimeout(() => setTestSent(false), 2500);
+  };
+
+  const handleSendDelayed10sTest = async () => {
+    await sendTestAlert(10);
+    setCountdown(10);
+    const interval = setInterval(() => {
+      setCountdown((prev) => {
+        if (prev === null || prev <= 1) {
+          clearInterval(interval);
+          return null;
+        }
+        return prev - 1;
+      });
+    }, 1000);
   };
 
   const handleToggleWebPush = async () => {
@@ -57,10 +73,10 @@ export const NotificationConfigModal: React.FC<NotificationConfigModalProps> = (
             </div>
             <div>
               <h2 className="text-base font-bold text-stone-900 dark:text-stone-100">
-                Android & Phone Notifications
+                Android Notification Center
               </h2>
               <p className="text-xs text-stone-500 dark:text-stone-400">
-                Ring both of your phones for feeds and medication doses
+                Topic: <strong className="font-mono text-amber-600 dark:text-amber-400">mom-bebe-h7j14g</strong>
               </p>
             </div>
           </div>
@@ -81,62 +97,107 @@ export const NotificationConfigModal: React.FC<NotificationConfigModalProps> = (
               <div className="flex items-center space-x-2">
                 <Smartphone className="w-5 h-5 text-amber-600 dark:text-amber-400" />
                 <h3 className="text-sm font-bold text-stone-900 dark:text-stone-100">
-                  How to receive alerts on both Android phones
+                  Shared Family Topic: {reminders.ntfyTopic}
                 </h3>
               </div>
-              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-200 dark:bg-amber-900/60 text-amber-800 dark:text-amber-200">
-                Reliable & Free
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300">
+                Active
               </span>
             </div>
 
-            <ol className="text-xs text-stone-700 dark:text-stone-300 space-y-2 pl-4 list-decimal leading-relaxed">
-              <li>
-                Install the free <strong>ntfy</strong> app from Google Play Store on both phones:{' '}
-                <a
-                  href="https://play.google.com/store/apps/details?id=io.heckel.ntfy"
-                  target="_blank"
-                  rel="noreferrer"
-                  className="text-amber-700 dark:text-amber-400 font-bold underline inline-flex items-center gap-0.5"
-                >
-                  Google Play Link <ExternalLink className="w-3 h-3 inline" />
-                </a>
-              </li>
-              <li>
-                In the app, tap <strong>+ (Subscribe)</strong> and enter your family topic:
-                <div className="mt-1.5 flex items-center space-x-2">
-                  <input
-                    type="text"
-                    value={topicInput}
-                    onChange={(e) => setTopicInput(e.target.value)}
-                    onBlur={handleSaveTopic}
-                    className="flex-1 px-3 py-1.5 font-mono text-xs rounded-xl border border-stone-300 dark:border-stone-700 bg-white dark:bg-stone-900 text-stone-900 dark:text-stone-100"
-                  />
-                  <button
-                    onClick={handleCopyTopicUrl}
-                    className="px-3 py-1.5 text-xs font-bold rounded-xl bg-stone-900 dark:bg-stone-100 text-white dark:text-stone-900 flex items-center space-x-1"
-                  >
-                    {copied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
-                    <span>{copied ? 'Copied' : 'Copy'}</span>
-                  </button>
-                </div>
-              </li>
-              <li>
-                Done! Whenever a feed or medication is due, both phones will ring and vibrate.
-              </li>
-            </ol>
+            <div className="flex items-center space-x-2">
+              <input
+                type="text"
+                value={topicInput}
+                onChange={(e) => setTopicInput(e.target.value)}
+                onBlur={handleSaveTopic}
+                className="flex-1 px-3 py-1.5 font-mono text-xs rounded-xl border border-stone-300 dark:border-stone-700 bg-white dark:bg-stone-900 text-stone-900 dark:text-stone-100"
+              />
+              <button
+                onClick={handleCopyTopicUrl}
+                className="px-3 py-1.5 text-xs font-bold rounded-xl bg-stone-900 dark:bg-stone-100 text-white dark:text-stone-900 flex items-center space-x-1"
+              >
+                {copied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                <span>{copied ? 'Copied Link' : 'Copy'}</span>
+              </button>
+              <a
+                href={`https://ntfy.sh/${reminders.ntfyTopic}`}
+                target="_blank"
+                rel="noreferrer"
+                className="p-2 rounded-xl bg-stone-100 dark:bg-stone-800 text-stone-700 dark:text-stone-300 hover:bg-stone-200 transition"
+                title="Open topic in ntfy.sh"
+              >
+                <ExternalLink className="w-4 h-4" />
+              </a>
+            </div>
 
-            {/* Test Button */}
-            <button
-              onClick={handleSendTest}
-              className={`w-full py-2.5 px-4 rounded-xl text-xs font-extrabold transition flex items-center justify-center space-x-2 shadow-sm active:scale-95 ${
-                testSent
-                  ? 'bg-emerald-600 text-white'
-                  : 'bg-amber-600 hover:bg-amber-500 text-white'
-              }`}
-            >
-              <Send className="w-4 h-4" />
-              <span>{testSent ? '✓ Alert Sent to Both Phones!' : 'Send Test Alert to Both Phones Now'}</span>
-            </button>
+            {/* Test Action Buttons */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
+              <button
+                onClick={handleSendTest}
+                className={`py-2.5 px-3 rounded-xl text-xs font-extrabold transition flex items-center justify-center space-x-1.5 shadow-sm active:scale-95 ${
+                  testSent
+                    ? 'bg-emerald-600 text-white'
+                    : 'bg-amber-600 hover:bg-amber-500 text-white'
+                }`}
+              >
+                <Send className="w-3.5 h-3.5" />
+                <span>{testSent ? '✓ Instant Alert Sent!' : 'Send Instant Test Ping'}</span>
+              </button>
+
+              <button
+                onClick={handleSendDelayed10sTest}
+                disabled={countdown !== null}
+                className={`py-2.5 px-3 rounded-xl text-xs font-extrabold transition flex items-center justify-center space-x-1.5 shadow-sm active:scale-95 ${
+                  countdown !== null
+                    ? 'bg-stone-800 text-amber-400 border border-amber-500 animate-pulse'
+                    : 'bg-stone-900 dark:bg-stone-100 text-white dark:text-stone-900 hover:opacity-90'
+                }`}
+              >
+                <span>
+                  {countdown !== null
+                    ? `Lock Phone! Rings in ${countdown}s...`
+                    : 'Test Lock Screen (10s Delay)'}
+                </span>
+              </button>
+            </div>
+
+            {countdown !== null && (
+              <p className="text-xs text-amber-700 dark:text-amber-300 font-semibold text-center bg-amber-500/10 p-2 rounded-xl border border-amber-500/30">
+                👉 <strong>Lock your phone right now</strong> and wait {countdown} seconds to verify that it wakes up and rings!
+              </p>
+            )}
+          </div>
+
+          {/* Android Delay Fix Guide */}
+          <div className="p-4 rounded-2xl bg-stone-50 dark:bg-stone-900/60 border border-stone-200 dark:border-stone-800 space-y-2.5">
+            <h4 className="text-xs font-extrabold uppercase tracking-wider text-stone-900 dark:text-stone-100 flex items-center gap-1.5">
+              <span>⚡</span> Fix Android Delays & Missed Alerts (Checklist)
+            </h4>
+            <ul className="text-xs text-stone-600 dark:text-stone-300 space-y-2 leading-relaxed">
+              <li className="flex items-start gap-2">
+                <span className="font-bold text-amber-600 dark:text-amber-400">1.</span>
+                <span>
+                  <strong>Disable Android Battery Optimization (Crucial!)</strong>: On Android, go to{' '}
+                  <em>Settings $\rightarrow$ Apps $\rightarrow$ ntfy $\rightarrow$ Battery $\rightarrow$ Select "Unrestricted"</em>.
+                  Otherwise Android puts ntfy to sleep to save battery.
+                </span>
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="font-bold text-amber-600 dark:text-amber-400">2.</span>
+                <span>
+                  <strong>Cloud Server Scheduling Active</strong>: Feeds and medications are now scheduled directly on
+                  ntfy's servers at the exact second they are due—so your phones will ring even if your browser tab is closed.
+                </span>
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="font-bold text-amber-600 dark:text-amber-400">3.</span>
+                <span>
+                  <strong>Check Notification Volume & Do Not Disturb</strong>: Ensure ntfy notifications have sound enabled
+                  and "Pop on screen" turned on in Android App Info.
+                </span>
+              </li>
+            </ul>
           </div>
 
           {/* Configured Alerts Checklist */}

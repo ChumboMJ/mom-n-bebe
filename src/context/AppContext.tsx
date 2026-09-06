@@ -12,7 +12,7 @@ import {
 } from '../types';
 import { loadAppData, saveAppData, downloadBackupJSON, importAppDataFromJSON } from '../db/storage';
 import { checkMedicationConflict, calculateNextDoseInfo } from '../utils/medicationSafety';
-import { playGentleChime, dispatchCareAlert } from '../utils/notifications';
+import { playGentleChime, dispatchCareAlert, scheduleServerCareAlert } from '../utils/notifications';
 
 interface AppContextType {
   // Data state
@@ -60,7 +60,7 @@ interface AppContextType {
   // Backup & Restore
   exportBackup: () => void;
   importBackup: (json: string) => boolean;
-  sendTestAlert: () => Promise<boolean>;
+  sendTestAlert: (delaySeconds?: number) => Promise<boolean>;
 
   // Computed Helpers
   latestFeed: BottleFeed | null;
@@ -332,6 +332,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       feeds: [newFeed, ...prev.feeds],
     }));
 
+    // Immediately schedule 3-hour alert directly on ntfy servers so phones ring even if asleep
+    if (data.settings.reminders.ntfyEnabled && data.settings.reminders.notifyBabyFeed3h) {
+      const feedTime = new Date(newFeed.timestamp).getTime();
+      const intervalMs = (data.settings.reminders.feedIntervalHours || 3.0) * 60 * 60 * 1000;
+      const dueTime = new Date(feedTime + intervalMs);
+
+      scheduleServerCareAlert({
+        topic: data.settings.reminders.ntfyTopic,
+        targetTime: dueTime,
+        title: '🍼 Baby Feed Due Now (3-Hour Window)',
+        message: `It has been ${data.settings.reminders.feedIntervalHours}h since the last bottle. Time to feed baby!`,
+        tags: ['baby', 'bottle', 'alarm_clock'],
+      });
+    }
+
     if (data.settings.reminders.soundEnabled) {
       playGentleChime();
     }
@@ -408,6 +423,34 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       ...prev,
       medLogs: [newLog, ...prev.medLogs],
     }));
+
+    // Schedule next dose reminder directly on ntfy servers
+    if (data.settings.reminders.ntfyEnabled) {
+      const medTime = new Date(newLog.timestamp).getTime();
+      const medName = targetMed.name === 'Acetaminophen' ? 'APAP (Tylenol)' : targetMed.name;
+
+      if (targetMed.category === 'scheduled_staggered') {
+        const nextTime = new Date(medTime + targetMed.minIntervalHours * 60 * 60 * 1000);
+        scheduleServerCareAlert({
+          topic: data.settings.reminders.ntfyTopic,
+          targetTime: nextTime,
+          title: `💊 Mom: ${medName} Due Now`,
+          message: `Scheduled ${targetMed.minIntervalHours}h dose is due now (${medName} ${targetMed.dosage}).`,
+          tags: ['pill', 'health', 'mom'],
+        });
+      } else if (targetMed.category === 'daily_fixed') {
+        const tomorrow = new Date();
+        tomorrow.setDate(tomorrow.getDate() + 1);
+        tomorrow.setHours(21, 0, 0, 0);
+        scheduleServerCareAlert({
+          topic: data.settings.reminders.ntfyTopic,
+          targetTime: tomorrow,
+          title: `💊 Mom: Escitalopram Due (9:00 PM)`,
+          message: 'Daily maintenance dose reminder for Mom.',
+          tags: ['pill', 'star'],
+        });
+      }
+    }
 
     if (data.settings.reminders.soundEnabled) {
       playGentleChime();
@@ -490,11 +533,26 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
-  const sendTestAlert = async (): Promise<boolean> => {
+  const sendTestAlert = async (delaySeconds?: number): Promise<boolean> => {
+    if (delaySeconds && delaySeconds > 0) {
+      dispatchCareAlert({
+        title: '🔔 10-Second Lock Screen Test Passed!',
+        message: 'Your Android phone received this while locked. Your ntfy background push is working with zero delay!',
+        priority: 'urgent',
+        tags: ['bell', 'tada', 'white_check_mark'],
+        soundEnabled: data.settings.reminders.soundEnabled,
+        notificationsEnabled: data.settings.reminders.notificationsEnabled,
+        ntfyEnabled: data.settings.reminders.ntfyEnabled,
+        ntfyTopic: data.settings.reminders.ntfyTopic,
+        delay: `${delaySeconds}s`,
+      });
+      return true;
+    }
+
     dispatchCareAlert({
-      title: '🍼 Mom & Bébé Alert Test',
-      message: 'Testing phone notifications! If your Android phone rang or vibrated, your alerts are configured.',
-      priority: 'high',
+      title: '🍼 Mom & Bébé Alert Test (Immediate)',
+      message: 'Instant test notification! If your Android phone rang or vibrated, your alerts are configured.',
+      priority: 'urgent',
       tags: ['baby', 'bell', 'tada'],
       soundEnabled: data.settings.reminders.soundEnabled,
       notificationsEnabled: data.settings.reminders.notificationsEnabled,
