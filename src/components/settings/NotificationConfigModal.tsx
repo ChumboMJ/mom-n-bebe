@@ -10,11 +10,30 @@ interface NotificationConfigModalProps {
 
 export const NotificationConfigModal: React.FC<NotificationConfigModalProps> = ({ isOpen, onClose }) => {
   const { data, updateReminderSettings, sendTestAlert } = useApp();
-  const { reminders } = data.settings;
+  const reminders = data?.settings?.reminders || {
+    feedIntervalHours: 3.0,
+    soundEnabled: true,
+    notificationsEnabled: true,
+    ntfyTopic: 'mom-bebe-h7j14g',
+    ntfyEnabled: true,
+    notifyBabyFeed3h: true,
+    notifyApap: true,
+    notifyIbuprofen: true,
+    notifyEscitalopram: true,
+    notifyColace: true,
+  };
 
-  const [topicInput, setTopicInput] = useState(reminders.ntfyTopic);
+  const activeTopic = reminders.ntfyTopic || 'mom-bebe-h7j14g';
+  const [topicInput, setTopicInput] = useState(activeTopic);
   const [copied, setCopied] = useState(false);
   const [testSent, setTestSent] = useState(false);
+
+  // Sync state if external topic updates
+  React.useEffect(() => {
+    if (activeTopic) {
+      setTopicInput(activeTopic);
+    }
+  }, [activeTopic]);
 
   if (!isOpen) return null;
 
@@ -26,7 +45,7 @@ export const NotificationConfigModal: React.FC<NotificationConfigModalProps> = (
   };
 
   const handleCopyTopicUrl = () => {
-    navigator.clipboard.writeText(`https://ntfy.sh/${reminders.ntfyTopic}`);
+    navigator.clipboard.writeText(`https://ntfy.sh/${activeTopic}`);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
@@ -76,12 +95,13 @@ export const NotificationConfigModal: React.FC<NotificationConfigModalProps> = (
                 Android Notification Center
               </h2>
               <p className="text-xs text-stone-500 dark:text-stone-400">
-                Topic: <strong className="font-mono text-amber-600 dark:text-amber-400">mom-bebe-h7j14g</strong>
+                Topic: <strong className="font-mono text-amber-600 dark:text-amber-400">{activeTopic}</strong>
               </p>
             </div>
           </div>
 
           <button
+            type="button"
             onClick={onClose}
             className="p-1 rounded-full text-stone-400 hover:text-stone-600 dark:hover:text-stone-200"
           >
@@ -91,13 +111,29 @@ export const NotificationConfigModal: React.FC<NotificationConfigModalProps> = (
 
         {/* Content */}
         <div className="p-5 space-y-5 overflow-y-auto">
+          {/* Prominent Android Battery Optimization Notice (User Requested) */}
+          <div className="p-4 rounded-2xl bg-amber-50 dark:bg-amber-950/30 border-2 border-amber-400 dark:border-amber-600/50 space-y-2">
+            <div className="flex items-center space-x-2 text-amber-900 dark:text-amber-200 font-bold text-xs">
+              <span className="text-base">⚠️</span>
+              <span>Disable Android Battery Optimization for ntfy (Crucial):</span>
+            </div>
+            <p className="text-xs text-stone-700 dark:text-stone-200 leading-relaxed pl-6">
+              On your phone, go to:{' '}
+              <strong className="text-stone-900 dark:text-white">Settings &rarr; Apps &rarr; ntfy &rarr; Battery</strong>.
+              <br />
+              Change from <span className="underline">Optimized</span> to{' '}
+              <strong className="text-emerald-700 dark:text-emerald-400 bg-emerald-100 dark:bg-emerald-950/60 px-1 py-0.5 rounded font-bold">Unrestricted</strong>.{' '}
+              <em>(This ensures Android never puts ntfy to sleep).</em>
+            </p>
+          </div>
+
           {/* Android ntfy Setup Card */}
           <div className="p-4 rounded-2xl bg-gradient-to-br from-amber-500/10 to-orange-500/10 border border-amber-500/20 dark:border-amber-500/30 space-y-3">
             <div className="flex items-center justify-between">
               <div className="flex items-center space-x-2">
                 <Smartphone className="w-5 h-5 text-amber-600 dark:text-amber-400" />
                 <h3 className="text-sm font-bold text-stone-900 dark:text-stone-100">
-                  Shared Family Topic: {reminders.ntfyTopic}
+                  Shared Family Topic: {activeTopic}
                 </h3>
               </div>
               <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300">
@@ -114,6 +150,7 @@ export const NotificationConfigModal: React.FC<NotificationConfigModalProps> = (
                 className="flex-1 px-3 py-1.5 font-mono text-xs rounded-xl border border-stone-300 dark:border-stone-700 bg-white dark:bg-stone-900 text-stone-900 dark:text-stone-100"
               />
               <button
+                type="button"
                 onClick={handleCopyTopicUrl}
                 className="px-3 py-1.5 text-xs font-bold rounded-xl bg-stone-900 dark:bg-stone-100 text-white dark:text-stone-900 flex items-center space-x-1"
               >
@@ -121,7 +158,7 @@ export const NotificationConfigModal: React.FC<NotificationConfigModalProps> = (
                 <span>{copied ? 'Copied Link' : 'Copy'}</span>
               </button>
               <a
-                href={`https://ntfy.sh/${reminders.ntfyTopic}`}
+                href={`https://ntfy.sh/${activeTopic}`}
                 target="_blank"
                 rel="noreferrer"
                 className="p-2 rounded-xl bg-stone-100 dark:bg-stone-800 text-stone-700 dark:text-stone-300 hover:bg-stone-200 transition"
@@ -134,6 +171,7 @@ export const NotificationConfigModal: React.FC<NotificationConfigModalProps> = (
             {/* Test Action Buttons */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
               <button
+                type="button"
                 onClick={handleSendTest}
                 className={`py-2.5 px-3 rounded-xl text-xs font-extrabold transition flex items-center justify-center space-x-1.5 shadow-sm active:scale-95 ${
                   testSent
@@ -146,6 +184,7 @@ export const NotificationConfigModal: React.FC<NotificationConfigModalProps> = (
               </button>
 
               <button
+                type="button"
                 onClick={handleSendDelayed10sTest}
                 disabled={countdown !== null}
                 className={`py-2.5 px-3 rounded-xl text-xs font-extrabold transition flex items-center justify-center space-x-1.5 shadow-sm active:scale-95 ${
@@ -172,22 +211,20 @@ export const NotificationConfigModal: React.FC<NotificationConfigModalProps> = (
           {/* Android Delay Fix Guide */}
           <div className="p-4 rounded-2xl bg-stone-50 dark:bg-stone-900/60 border border-stone-200 dark:border-stone-800 space-y-2.5">
             <h4 className="text-xs font-extrabold uppercase tracking-wider text-stone-900 dark:text-stone-100 flex items-center gap-1.5">
-              <span>⚡</span> Fix Android Delays & Missed Alerts (Checklist)
+              <span>⚡</span> Android Checklist for Zero Delay
             </h4>
             <ul className="text-xs text-stone-600 dark:text-stone-300 space-y-2 leading-relaxed">
               <li className="flex items-start gap-2">
                 <span className="font-bold text-amber-600 dark:text-amber-400">1.</span>
                 <span>
-                  <strong>Disable Android Battery Optimization (Crucial!)</strong>: On Android, go to{' '}
-                  <em>Settings $\rightarrow$ Apps $\rightarrow$ ntfy $\rightarrow$ Battery $\rightarrow$ Select "Unrestricted"</em>.
-                  Otherwise Android puts ntfy to sleep to save battery.
+                  <strong>Battery: Unrestricted</strong> (see above box) &ndash; prevents phone from sleeping through alarms.
                 </span>
               </li>
               <li className="flex items-start gap-2">
                 <span className="font-bold text-amber-600 dark:text-amber-400">2.</span>
                 <span>
-                  <strong>Cloud Server Scheduling Active</strong>: Feeds and medications are now scheduled directly on
-                  ntfy's servers at the exact second they are due—so your phones will ring even if your browser tab is closed.
+                  <strong>Cloud Server Scheduling Active</strong>: Feeds and medications are scheduled directly on
+                  ntfy's servers at the exact second they are due &ndash; so your phones ring even if browser tabs are closed.
                 </span>
               </li>
               <li className="flex items-start gap-2">
