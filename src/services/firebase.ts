@@ -11,7 +11,6 @@ import { AppData } from '../types';
 
 const firebaseConfig = {
   projectId: 'mom-n-bebe-app',
-  apiKey: 'AIzaSyBxkIiWTIiXhijHZ0gTZDJan8PrmP_l4jY',
 };
 
 const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
