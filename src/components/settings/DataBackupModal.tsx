@@ -9,8 +9,9 @@ interface DataBackupModalProps {
 }
 
 export const DataBackupModal: React.FC<DataBackupModalProps> = ({ isOpen, onClose }) => {
-  const { data, exportBackup, importBackup, updateReminderSettings } = useApp();
+  const { data, exportBackup, importBackup, mergeBackup, updateReminderSettings, syncStatus } = useApp();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const mergeFileInputRef = useRef<HTMLInputElement>(null);
   const [importStatus, setImportStatus] = useState<string | null>(null);
 
   if (!isOpen) return null;
@@ -31,6 +32,27 @@ export const DataBackupModal: React.FC<DataBackupModalProps> = ({ isOpen, onClos
         }, 1500);
       } else {
         setImportStatus('Failed to restore. Invalid file format.');
+      }
+    };
+    reader.readAsText(file);
+  };
+
+  const handleMergeFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const text = event.target?.result as string;
+      const success = mergeBackup(text);
+      if (success) {
+        setImportStatus('Partner backup merged successfully without overwriting!');
+        setTimeout(() => {
+          setImportStatus(null);
+          onClose();
+        }, 1500);
+      } else {
+        setImportStatus('Failed to merge. Invalid file format.');
       }
     };
     reader.readAsText(file);
@@ -57,10 +79,11 @@ export const DataBackupModal: React.FC<DataBackupModalProps> = ({ isOpen, onClos
           <div className="flex items-center space-x-2">
             <ShieldCheck className="w-5 h-5 text-emerald-500" />
             <h2 className="text-base font-bold text-stone-900 dark:text-stone-100">
-              Data, Backup & Settings
+              Cloud Sync & Data Backup
             </h2>
           </div>
           <button
+            type="button"
             onClick={onClose}
             className="p-1 rounded-full text-stone-400 hover:text-stone-600 dark:hover:text-stone-200"
           >
@@ -70,34 +93,76 @@ export const DataBackupModal: React.FC<DataBackupModalProps> = ({ isOpen, onClos
 
         {/* Body */}
         <div className="p-5 space-y-5 overflow-y-auto">
+          {/* Cloud Sync Status Banner */}
+          <div className="p-3.5 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-between">
+            <div className="space-y-0.5">
+              <span className="text-xs font-bold text-emerald-900 dark:text-emerald-200 block">
+                Google Cloud Firestore Live Sync
+              </span>
+              <p className="text-[11px] text-emerald-700 dark:text-emerald-300">
+                {syncStatus === 'synced'
+                  ? 'Active: Feeds & diapers sync across both phones instantly.'
+                  : syncStatus === 'connecting'
+                  ? 'Connecting to Firestore cloud database...'
+                  : 'Offline: Data stored locally until connection restores.'}
+              </p>
+            </div>
+            <span
+              className={`w-2.5 h-2.5 rounded-full ${
+                syncStatus === 'synced'
+                  ? 'bg-emerald-500 animate-pulse'
+                  : syncStatus === 'connecting'
+                  ? 'bg-amber-500 animate-pulse'
+                  : 'bg-stone-400'
+              }`}
+            />
+          </div>
+
           {/* Export & Import */}
           <div className="space-y-3">
             <h3 className="text-xs font-bold uppercase tracking-wider text-stone-400">
-              Export & Backup Data
+              Manual Backup & Merge
             </h3>
             <p className="text-xs text-stone-600 dark:text-stone-400">
-              All your feeds, diaper changes, and medication timestamps are stored on your device. Export a backup
-              JSON file to keep a safe copy or move to another device.
+              Save a safety copy of your full history or merge in a backup file from your partner's phone.
             </p>
 
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
               <button
                 type="button"
                 onClick={exportBackup}
                 className="flex items-center justify-center space-x-1.5 p-3 rounded-2xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold shadow-sm transition active:scale-95"
               >
                 <Download className="w-4 h-4" />
-                <span>Export JSON</span>
+                <span>Export Safety JSON</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => mergeFileInputRef.current?.click()}
+                className="flex items-center justify-center space-x-1.5 p-3 rounded-2xl bg-stone-900 dark:bg-stone-100 text-white dark:text-stone-900 text-xs font-bold shadow-sm transition active:scale-95"
+                title="Combines partner backup without erasing your data"
+              >
+                <Upload className="w-4 h-4" />
+                <span>Merge Partner JSON</span>
               </button>
 
               <button
                 type="button"
                 onClick={() => fileInputRef.current?.click()}
-                className="flex items-center justify-center space-x-1.5 p-3 rounded-2xl bg-stone-100 dark:bg-stone-800 hover:bg-stone-200 text-stone-800 dark:text-stone-200 text-xs font-bold border border-stone-200 dark:border-stone-700 transition active:scale-95"
+                className="col-span-1 sm:col-span-2 flex items-center justify-center space-x-1.5 p-2 rounded-xl bg-stone-100 dark:bg-stone-800/60 hover:bg-stone-200 text-stone-600 dark:text-stone-400 text-xs font-medium border border-stone-200 dark:border-stone-700/50 transition active:scale-95"
+                title="Overwrites current state with an exact backup"
               >
-                <Upload className="w-4 h-4" />
-                <span>Import JSON</span>
+                <span>Or Restore / Replace with File...</span>
               </button>
+
+              <input
+                type="file"
+                ref={mergeFileInputRef}
+                onChange={handleMergeFileUpload}
+                accept=".json,application/json"
+                className="hidden"
+              />
               <input
                 type="file"
                 ref={fileInputRef}

@@ -214,3 +214,76 @@ export const importAppDataFromJSON = (jsonString: string): AppData => {
     medications: Array.isArray(parsed.medications) ? (parsed.medications as Medication[]) : DEFAULT_MEDICATIONS,
   };
 };
+
+/**
+ * Smart Merger Engine: Merges two AppData sets (e.g. local phone history and cloud/partner history).
+ * - Combines feeds, diapers, medLogs, wellnessLogs without duplicates (keyed by entry ID).
+ * - Sorts all collections in reverse chronological order (newest first).
+ * - Preserves user settings with sensible precedence.
+ */
+export const mergeAppDatasets = (localData: AppData, incomingData: AppData): AppData => {
+  // 1. Deduplicate feeds
+  const feedMap = new Map<string, BottleFeed>();
+  incomingData.feeds.forEach((f) => feedMap.set(f.id, f));
+  localData.feeds.forEach((f) => feedMap.set(f.id, f));
+  const mergedFeeds = Array.from(feedMap.values()).sort(
+    (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+  );
+
+  // 2. Deduplicate diapers
+  const diaperMap = new Map<string, DiaperLog>();
+  incomingData.diapers.forEach((d) => diaperMap.set(d.id, d));
+  localData.diapers.forEach((d) => diaperMap.set(d.id, d));
+  const mergedDiapers = Array.from(diaperMap.values()).sort(
+    (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+  );
+
+  // 3. Deduplicate medication logs
+  const medLogMap = new Map<string, MedLog>();
+  incomingData.medLogs.forEach((m) => medLogMap.set(m.id, m));
+  localData.medLogs.forEach((m) => medLogMap.set(m.id, m));
+  const mergedMedLogs = Array.from(medLogMap.values()).sort(
+    (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+  );
+
+  // 4. Deduplicate wellness logs
+  const wellnessMap = new Map<string, MomWellnessLog>();
+  incomingData.wellnessLogs.forEach((w) => wellnessMap.set(w.id, w));
+  localData.wellnessLogs.forEach((w) => wellnessMap.set(w.id, w));
+  const mergedWellness = Array.from(wellnessMap.values()).sort(
+    (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+  );
+
+  // 5. Ensure all medications exist
+  const medMap = new Map<string, Medication>();
+  DEFAULT_MEDICATIONS.forEach((m) => medMap.set(m.id, m));
+  if (Array.isArray(incomingData.medications)) {
+    incomingData.medications.forEach((m) => medMap.set(m.id, m));
+  }
+  if (Array.isArray(localData.medications)) {
+    localData.medications.forEach((m) => medMap.set(m.id, m));
+  }
+
+  // 6. Settings union
+  const mergedSettings = {
+    ...incomingData.settings,
+    ...localData.settings,
+    reminders: {
+      ...(incomingData.settings?.reminders || {}),
+      ...(localData.settings?.reminders || {}),
+      ntfyTopic: 'mom-bebe-h7j14g', // Keep active family topic
+    },
+  };
+
+  return {
+    version: 1,
+    exportedAt: new Date().toISOString(),
+    settings: mergedSettings,
+    feeds: mergedFeeds,
+    diapers: mergedDiapers,
+    medLogs: mergedMedLogs,
+    wellnessLogs: mergedWellness,
+    medications: Array.from(medMap.values()),
+  };
+};
+

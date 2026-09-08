@@ -1,6 +1,6 @@
 import React from 'react';
 import { useApp } from '../../context/AppContext';
-import { Moon, Sun, Bell, Download, Baby, Heart } from 'lucide-react';
+import { Moon, Sun, Bell, Download, Baby, Heart, Cloud, CloudOff } from 'lucide-react';
 
 interface HeaderProps {
   onOpenBackupModal: () => void;
@@ -8,7 +8,7 @@ interface HeaderProps {
 }
 
 export const Header: React.FC<HeaderProps> = ({ onOpenBackupModal, onOpenNotificationModal }) => {
-  const { unit, toggleUnit, nightMode, toggleNightMode } = useApp();
+  const { unit, toggleUnit, nightMode, toggleNightMode, syncStatus } = useApp();
 
   return (
     <header className="sticky top-0 z-40 backdrop-blur-md bg-white/90 dark:bg-[#07080b]/90 border-b border-stone-200 dark:border-stone-800 px-4 py-3 transition-colors">
@@ -32,6 +32,33 @@ export const Header: React.FC<HeaderProps> = ({ onOpenBackupModal, onOpenNotific
 
         {/* Action Controls */}
         <div className="flex items-center space-x-2">
+          {/* Cloud Live Sync Indicator */}
+          <div
+            title={
+              syncStatus === 'synced'
+                ? 'Cloud Sync: Live (Both phones in sync)'
+                : syncStatus === 'connecting'
+                ? 'Cloud Sync: Connecting...'
+                : 'Cloud Sync: Offline (Saved locally)'
+            }
+            className="flex items-center px-2 py-1.5 rounded-xl text-xs font-semibold bg-stone-100 dark:bg-stone-800/80 border border-stone-200 dark:border-stone-700/60"
+          >
+            {syncStatus === 'synced' ? (
+              <span className="flex items-center space-x-1 text-emerald-600 dark:text-emerald-400">
+                <Cloud className="w-3.5 h-3.5" />
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+              </span>
+            ) : syncStatus === 'connecting' ? (
+              <span className="flex items-center space-x-1 text-amber-500">
+                <Cloud className="w-3.5 h-3.5 animate-pulse" />
+              </span>
+            ) : (
+              <span className="flex items-center space-x-1 text-stone-400">
+                <CloudOff className="w-3.5 h-3.5" />
+              </span>
+            )}
+          </div>
+
           {/* Unit Switcher: ML / OZ */}
           <button
             onClick={toggleUnit}

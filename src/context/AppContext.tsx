@@ -10,9 +10,20 @@ import {
   ReminderSettings,
   ConflictCheckResult,
 } from '../types';
-import { loadAppData, saveAppData, downloadBackupJSON, importAppDataFromJSON } from '../db/storage';
+import {
+  loadAppData,
+  saveAppData,
+  downloadBackupJSON,
+  importAppDataFromJSON,
+  mergeAppDatasets,
+} from '../db/storage';
 import { checkMedicationConflict, calculateNextDoseInfo } from '../utils/medicationSafety';
 import { playGentleChime, dispatchCareAlert, scheduleServerCareAlert } from '../utils/notifications';
+import {
+  subscribeToHouseholdData,
+  saveHouseholdData,
+  fetchHouseholdData,
+} from '../services/firebase';
 
 interface AppContextType {
   // Data state
@@ -20,6 +31,7 @@ interface AppContextType {
   now: Date;
   unit: VolumeUnit;
   nightMode: boolean;
+  syncStatus: 'connecting' | 'synced' | 'offline';
   
   // Actions - Feed
   addFeed: (feed: {
@@ -60,6 +72,7 @@ interface AppContextType {
   // Backup & Restore
   exportBackup: () => void;
   importBackup: (json: string) => boolean;
+  mergeBackup: (json: string) => boolean;
   sendTestAlert: (delaySeconds?: number) => Promise<boolean>;
 
   // Computed Helpers
@@ -83,12 +96,76 @@ const AppContext = createContext<AppContextType | null>(null);
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [data, setData] = useState<AppData>(() => loadAppData());
   const [now, setNow] = useState<Date>(new Date());
+  const [syncStatus, setSyncStatus] = useState<'connecting' | 'synced' | 'offline'>('connecting');
   const hasAlertedRef = useRef<{ [feedId: string]: boolean }>({});
+  const isInitialSyncDone = useRef(false);
 
   // Sync state changes to localStorage
   useEffect(() => {
     saveAppData(data);
   }, [data]);
+
+  // Real-Time Cloud Sync & Seamless Dual-Phone Auto-Merge via Firestore
+  useEffect(() => {
+    let unsubscribe: (() => void) | undefined;
+
+    const initCloudSync = async () => {
+      try {
+        // 1. Initial merge check
+        const initialRemote = await fetchHouseholdData();
+        const currentLocal = loadAppData();
+
+        if (!initialRemote) {
+          // Cloud is empty -> seed cloud with this phone's local data
+          await saveHouseholdData(currentLocal);
+        } else {
+          // Cloud exists -> auto-merge local history with cloud history
+          const merged = mergeAppDatasets(currentLocal, initialRemote);
+          setData(merged);
+          saveAppData(merged);
+
+          // If local phone had entries not yet in cloud, update cloud
+          const hadLocalOnlyEntries =
+            currentLocal.feeds.some((f) => !initialRemote.feeds.some((rf) => rf.id === f.id)) ||
+            currentLocal.diapers.some((d) => !initialRemote.diapers.some((rd) => rd.id === d.id)) ||
+            currentLocal.medLogs.some((m) => !initialRemote.medLogs.some((rm) => rm.id === m.id));
+
+          if (hadLocalOnlyEntries) {
+            await saveHouseholdData(merged);
+          }
+        }
+        isInitialSyncDone.current = true;
+        setSyncStatus('synced');
+      } catch (err) {
+        console.warn('Initial Firestore merge fallback:', err);
+        setSyncStatus('offline');
+      }
+
+      // 2. Real-time live listener for sub-second synchronization
+      unsubscribe = subscribeToHouseholdData(
+        (remoteData) => {
+          setSyncStatus('synced');
+          if (isInitialSyncDone.current) {
+            setData((prevLocal) => {
+              const merged = mergeAppDatasets(prevLocal, remoteData);
+              saveAppData(merged);
+              return merged;
+            });
+          }
+        },
+        (err) => {
+          console.warn('Firestore real-time subscription error:', err);
+          setSyncStatus('offline');
+        }
+      );
+    };
+
+    initCloudSync();
+
+    return () => {
+      if (unsubscribe) unsubscribe();
+    };
+  }, []);
 
   // Apply night mode class to html element
   useEffect(() => {
@@ -327,10 +404,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       notes: feed.notes,
     };
 
-    setData((prev) => ({
-      ...prev,
-      feeds: [newFeed, ...prev.feeds],
-    }));
+    setData((prev) => {
+      const updated: AppData = {
+        ...prev,
+        feeds: [newFeed, ...prev.feeds],
+      };
+      saveHouseholdData(updated);
+      return updated;
+    });
 
     // Immediately schedule 3-hour alert directly on ntfy servers so phones ring even if asleep
     if (data.settings.reminders.ntfyEnabled && data.settings.reminders.notifyBabyFeed3h) {
@@ -353,10 +434,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const deleteFeed = (id: string) => {
-    setData((prev) => ({
-      ...prev,
-      feeds: prev.feeds.filter((f) => f.id !== id),
-    }));
+    setData((prev) => {
+      const updated = {
+        ...prev,
+        feeds: prev.feeds.filter((f) => f.id !== id),
+      };
+      saveHouseholdData(updated);
+      return updated;
+    });
   };
 
   // Diaper actions
@@ -378,10 +463,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       notes: diaper.notes,
     };
 
-    setData((prev) => ({
-      ...prev,
-      diapers: [newDiaper, ...prev.diapers],
-    }));
+    setData((prev) => {
+      const updated = {
+        ...prev,
+        diapers: [newDiaper, ...prev.diapers],
+      };
+      saveHouseholdData(updated);
+      return updated;
+    });
 
     if (data.settings.reminders.soundEnabled) {
       playGentleChime();
@@ -389,10 +478,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const deleteDiaper = (id: string) => {
-    setData((prev) => ({
-      ...prev,
-      diapers: prev.diapers.filter((d) => d.id !== id),
-    }));
+    setData((prev) => {
+      const updated = {
+        ...prev,
+        diapers: prev.diapers.filter((d) => d.id !== id),
+      };
+      saveHouseholdData(updated);
+      return updated;
+    });
   };
 
   // Medication actions
@@ -419,10 +512,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       notes: options?.notes,
     };
 
-    setData((prev) => ({
-      ...prev,
-      medLogs: [newLog, ...prev.medLogs],
-    }));
+    setData((prev) => {
+      const updated = {
+        ...prev,
+        medLogs: [newLog, ...prev.medLogs],
+      };
+      saveHouseholdData(updated);
+      return updated;
+    });
 
     // Schedule next dose reminder directly on ntfy servers
     if (data.settings.reminders.ntfyEnabled) {
@@ -460,10 +557,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const deleteMedLog = (id: string) => {
-    setData((prev) => ({
-      ...prev,
-      medLogs: prev.medLogs.filter((l) => l.id !== id),
-    }));
+    setData((prev) => {
+      const updated = {
+        ...prev,
+        medLogs: prev.medLogs.filter((l) => l.id !== id),
+      };
+      saveHouseholdData(updated);
+      return updated;
+    });
   };
 
   // Wellness actions
@@ -476,21 +577,29 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       notes: wellness.notes,
     };
 
-    setData((prev) => ({
-      ...prev,
-      wellnessLogs: [newLog, ...prev.wellnessLogs],
-    }));
+    setData((prev) => {
+      const updated = {
+        ...prev,
+        wellnessLogs: [newLog, ...prev.wellnessLogs],
+      };
+      saveHouseholdData(updated);
+      return updated;
+    });
   };
 
   // App settings toggles
   const toggleUnit = () => {
-    setData((prev) => ({
-      ...prev,
-      settings: {
-        ...prev.settings,
-        unit: prev.settings.unit === 'ml' ? 'oz' : 'ml',
-      },
-    }));
+    setData((prev) => {
+      const updated = {
+        ...prev,
+        settings: {
+          ...prev.settings,
+          unit: (prev.settings.unit === 'ml' ? 'oz' : 'ml') as VolumeUnit,
+        },
+      };
+      saveHouseholdData(updated);
+      return updated;
+    });
   };
 
   const toggleNightMode = () => {
@@ -504,19 +613,23 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const updateReminderSettings = (settings: Partial<ReminderSettings>) => {
-    setData((prev) => ({
-      ...prev,
-      settings: {
-        ...prev.settings,
-        reminders: {
-          ...prev.settings.reminders,
-          ...settings,
+    setData((prev) => {
+      const updated = {
+        ...prev,
+        settings: {
+          ...prev.settings,
+          reminders: {
+            ...prev.settings.reminders,
+            ...settings,
+          },
         },
-      },
-    }));
+      };
+      saveHouseholdData(updated);
+      return updated;
+    });
   };
 
-  // Export / Import
+  // Export / Import / Merge
   const exportBackup = () => {
     downloadBackupJSON(data);
   };
@@ -526,9 +639,26 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const imported = importAppDataFromJSON(json);
       setData(imported);
       saveAppData(imported);
+      saveHouseholdData(imported);
       return true;
     } catch (err) {
       console.error('Import failed:', err);
+      return false;
+    }
+  };
+
+  const mergeBackup = (json: string): boolean => {
+    try {
+      const incoming = importAppDataFromJSON(json);
+      setData((prev) => {
+        const merged = mergeAppDatasets(prev, incoming);
+        saveAppData(merged);
+        saveHouseholdData(merged);
+        return merged;
+      });
+      return true;
+    } catch (err) {
+      console.error('Merge failed:', err);
       return false;
     }
   };
@@ -569,6 +699,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         now,
         unit: data.settings.unit,
         nightMode: data.settings.nightMode,
+        syncStatus,
         addFeed,
         deleteFeed,
         addDiaper,
@@ -581,6 +712,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         updateReminderSettings,
         exportBackup,
         importBackup,
+        mergeBackup,
         sendTestAlert,
         latestFeed,
         latestDiaper,
