@@ -221,57 +221,61 @@ export const importAppDataFromJSON = (jsonString: string): AppData => {
  * - Sorts all collections in reverse chronological order (newest first).
  * - Preserves user settings with sensible precedence.
  */
-export const mergeAppDatasets = (localData: AppData, incomingData: AppData): AppData => {
-  // 1. Deduplicate feeds
+export const mergeAppDatasets = (localData: AppData, incomingData?: Partial<AppData> | null): AppData => {
+  if (!incomingData) return localData;
+
+  const safeIncomingFeeds = Array.isArray(incomingData.feeds) ? incomingData.feeds : [];
+  const safeLocalFeeds = Array.isArray(localData?.feeds) ? localData.feeds : [];
   const feedMap = new Map<string, BottleFeed>();
-  incomingData.feeds.forEach((f) => feedMap.set(f.id, f));
-  localData.feeds.forEach((f) => feedMap.set(f.id, f));
+  safeIncomingFeeds.forEach((f) => feedMap.set(f.id, f));
+  safeLocalFeeds.forEach((f) => feedMap.set(f.id, f));
   const mergedFeeds = Array.from(feedMap.values()).sort(
     (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
   );
 
-  // 2. Deduplicate diapers
+  const safeIncomingDiapers = Array.isArray(incomingData.diapers) ? incomingData.diapers : [];
+  const safeLocalDiapers = Array.isArray(localData?.diapers) ? localData.diapers : [];
   const diaperMap = new Map<string, DiaperLog>();
-  incomingData.diapers.forEach((d) => diaperMap.set(d.id, d));
-  localData.diapers.forEach((d) => diaperMap.set(d.id, d));
+  safeIncomingDiapers.forEach((d) => diaperMap.set(d.id, d));
+  safeLocalDiapers.forEach((d) => diaperMap.set(d.id, d));
   const mergedDiapers = Array.from(diaperMap.values()).sort(
     (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
   );
 
-  // 3. Deduplicate medication logs
+  const safeIncomingMeds = Array.isArray(incomingData.medLogs) ? incomingData.medLogs : [];
+  const safeLocalMeds = Array.isArray(localData?.medLogs) ? localData.medLogs : [];
   const medLogMap = new Map<string, MedLog>();
-  incomingData.medLogs.forEach((m) => medLogMap.set(m.id, m));
-  localData.medLogs.forEach((m) => medLogMap.set(m.id, m));
+  safeIncomingMeds.forEach((m) => medLogMap.set(m.id, m));
+  safeLocalMeds.forEach((m) => medLogMap.set(m.id, m));
   const mergedMedLogs = Array.from(medLogMap.values()).sort(
     (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
   );
 
-  // 4. Deduplicate wellness logs
+  const safeIncomingWellness = Array.isArray(incomingData.wellnessLogs) ? incomingData.wellnessLogs : [];
+  const safeLocalWellness = Array.isArray(localData?.wellnessLogs) ? localData.wellnessLogs : [];
   const wellnessMap = new Map<string, MomWellnessLog>();
-  incomingData.wellnessLogs.forEach((w) => wellnessMap.set(w.id, w));
-  localData.wellnessLogs.forEach((w) => wellnessMap.set(w.id, w));
+  safeIncomingWellness.forEach((w) => wellnessMap.set(w.id, w));
+  safeLocalWellness.forEach((w) => wellnessMap.set(w.id, w));
   const mergedWellness = Array.from(wellnessMap.values()).sort(
     (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
   );
 
-  // 5. Ensure all medications exist
   const medMap = new Map<string, Medication>();
   DEFAULT_MEDICATIONS.forEach((m) => medMap.set(m.id, m));
   if (Array.isArray(incomingData.medications)) {
     incomingData.medications.forEach((m) => medMap.set(m.id, m));
   }
-  if (Array.isArray(localData.medications)) {
+  if (Array.isArray(localData?.medications)) {
     localData.medications.forEach((m) => medMap.set(m.id, m));
   }
 
-  // 6. Settings union
   const mergedSettings = {
     ...incomingData.settings,
-    ...localData.settings,
+    ...localData?.settings,
     reminders: {
       ...(incomingData.settings?.reminders || {}),
-      ...(localData.settings?.reminders || {}),
-      ntfyTopic: 'mom-bebe-h7j14g', // Keep active family topic
+      ...(localData?.settings?.reminders || {}),
+      ntfyTopic: 'mom-bebe-h7j14g',
     },
   };
 

@@ -111,29 +111,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     const initCloudSync = async () => {
       try {
-        // 1. Initial merge check
-        const initialRemote = await fetchHouseholdData();
         const currentLocal = loadAppData();
+        const initialRemote = await fetchHouseholdData();
 
-        if (!initialRemote) {
-          // Cloud is empty -> seed cloud with this phone's local data
-          await saveHouseholdData(currentLocal);
-        } else {
-          // Cloud exists -> auto-merge local history with cloud history
-          const merged = mergeAppDatasets(currentLocal, initialRemote);
-          setData(merged);
-          saveAppData(merged);
+        // Perform union of local phone data and remote Firestore data
+        const merged = mergeAppDatasets(currentLocal, initialRemote);
+        setData(merged);
+        saveAppData(merged);
 
-          // If local phone had entries not yet in cloud, update cloud
-          const hadLocalOnlyEntries =
-            currentLocal.feeds.some((f) => !initialRemote.feeds.some((rf) => rf.id === f.id)) ||
-            currentLocal.diapers.some((d) => !initialRemote.diapers.some((rd) => rd.id === d.id)) ||
-            currentLocal.medLogs.some((m) => !initialRemote.medLogs.some((rm) => rm.id === m.id));
+        // Save merged state to Firestore so cloud has the complete record
+        await saveHouseholdData(merged);
 
-          if (hadLocalOnlyEntries) {
-            await saveHouseholdData(merged);
-          }
-        }
         isInitialSyncDone.current = true;
         setSyncStatus('synced');
       } catch (err) {
@@ -145,7 +133,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       unsubscribe = subscribeToHouseholdData(
         (remoteData) => {
           setSyncStatus('synced');
-          if (isInitialSyncDone.current) {
+          if (remoteData && Object.keys(remoteData).length > 0) {
             setData((prevLocal) => {
               const merged = mergeAppDatasets(prevLocal, remoteData);
               saveAppData(merged);
